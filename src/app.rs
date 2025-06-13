@@ -7,7 +7,6 @@ use log::{error, info};
 pub struct App {
     pub router: Router,
 }
-
 impl App {
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let config = Config::new().map_err(|e| {

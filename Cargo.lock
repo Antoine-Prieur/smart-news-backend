@@ -2073,12 +2073,14 @@ dependencies = [
  "bson",
  "chrono",
  "env_logger",
+ "http",
  "log",
  "mongodb",
  "reqwest",
  "serde",
  "serde_json",
  "tokio",
+ "tower-http",
 ]
 
 [[package]]
