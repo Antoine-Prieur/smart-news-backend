@@ -3,6 +3,7 @@ use log::{error, info};
 use mongodb::bson::doc;
 use mongodb::{Client, Collection, Database};
 
+#[derive(Clone)]
 pub struct ArticleRepository {
     collection: Collection<ArticleDocument>,
 }
