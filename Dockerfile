@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /app/target/release/smart-news-crawler ./app
+COPY --from=builder /app/target/release/smart-news-backend ./app
 
 ENV RUST_LOG=info
 CMD ["./app"]
