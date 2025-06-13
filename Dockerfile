@@ -14,4 +14,5 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY --from=builder /app/target/release/smart-news-crawler ./app
 
+ENV RUST_LOG=info
 CMD ["./app"]
