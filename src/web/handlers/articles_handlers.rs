@@ -15,24 +15,39 @@ pub struct ArticlesQuery {
 }
 
 #[derive(Serialize)]
-pub struct ArticlesResponse {
+pub struct PaginatedArticlesResponse {
     pub articles: Vec<ArticleDocument>,
-    pub count: usize,
+    pub total_count: u64,
+    pub current_page_count: usize,
+    pub page: u64,
+    pub per_page: i64,
+    pub total_pages: u64,
 }
 
 pub async fn get_articles(
     Query(params): Query<ArticlesQuery>,
     State(repository): State<ArticleRepository>,
-) -> Result<Json<ArticlesResponse>, StatusCode> {
+) -> Result<Json<PaginatedArticlesResponse>, StatusCode> {
     let published_at = params.published_at.as_deref();
 
     match repository
         .list_articles(params.limit, params.skip, published_at)
         .await
     {
-        Ok(articles) => {
-            let count = articles.len();
-            let response = ArticlesResponse { articles, count };
+        Ok(paginated_articles) => {
+            let total_count = paginated_articles.total_count;
+            let current_page_count = paginated_articles.current_page_count;
+            let page = paginated_articles.page;
+            let per_page = paginated_articles.per_page;
+            let total_pages = paginated_articles.total_pages;
+            let response = PaginatedArticlesResponse {
+                articles: paginated_articles.articles,
+                total_count,
+                current_page_count,
+                page,
+                per_page,
+                total_pages,
+            };
 
             Ok(Json(response))
         }
