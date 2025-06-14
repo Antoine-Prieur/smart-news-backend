@@ -46,6 +46,7 @@ impl ArticleRepository {
         if let Some(limit_count) = limit {
             options.limit = Some(limit_count);
         }
+        options.sort = Some(doc! { "published_at": -1 });
 
         let mut cursor = self
             .collection
