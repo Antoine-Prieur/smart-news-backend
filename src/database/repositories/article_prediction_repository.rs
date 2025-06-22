@@ -50,4 +50,32 @@ impl ArticlePredictionsRepository {
         );
         Ok(predictions)
     }
+
+    pub async fn find_by_article_id_and_prediction_type(
+        &self,
+        article_id: ObjectId,
+        prediction_type: &str,
+    ) -> Result<Option<ArticlePredictionsDocument>, mongodb::error::Error> {
+        let filter = doc! {
+            "article_id": article_id,
+            "prediction_type": prediction_type
+        };
+
+        match self.collection.find_one(filter).await? {
+            Some(prediction) => {
+                info!(
+                    "Found prediction for article {} with type '{}'",
+                    article_id, prediction_type
+                );
+                Ok(Some(prediction))
+            }
+            _none => {
+                info!(
+                    "No prediction found for article {} with type '{}'",
+                    article_id, prediction_type
+                );
+                Ok(None)
+            }
+        }
+    }
 }
