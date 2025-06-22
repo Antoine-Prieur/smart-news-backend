@@ -4,7 +4,10 @@ use std::env;
 pub struct Config {
     pub mongodb_connection_string: String,
     pub mongodb_database_name: String,
-    pub mongodb_collection_name: String,
+    pub articles_collection_name: String,
+    pub article_predictions_collection_name: String,
+    pub deployment_collection_name: String,
+    pub metrics_collection_name: String,
 }
 
 impl Config {
@@ -14,8 +17,15 @@ impl Config {
                 .unwrap_or_else(|_| "mongodb://admin:password123@localhost:27017".to_string()),
             mongodb_database_name: env::var("MONGODB_DATABASE_NAME")
                 .unwrap_or_else(|_| "news".to_string()),
-            mongodb_collection_name: env::var("MONGODB_COLLECTION_NAME")
+
+            articles_collection_name: env::var("ARTICLES_COLLECTION_NAME")
                 .unwrap_or_else(|_| "articles".to_string()),
+            article_predictions_collection_name: env::var("ARTICLE_PREDICTIONS_COLLECTION_NAME")
+                .unwrap_or_else(|_| "article_predictions".to_string()),
+            deployment_collection_name: env::var("DEPLOYMENT_COLLECTION_NAME")
+                .unwrap_or_else(|_| "deployments".to_string()),
+            metrics_collection_name: env::var("METRICS_COLLECTION_NAME")
+                .unwrap_or_else(|_| "metrics".to_string()),
         })
     }
 }

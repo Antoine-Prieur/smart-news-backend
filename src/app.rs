@@ -1,5 +1,8 @@
 use crate::config::Config;
-use crate::database::ArticleRepository;
+use crate::database::mongo_client::DatabaseClient;
+use crate::database::repositories::deployment_repository::DeploymentRepository;
+use crate::database::repositories::metrics_repository::MetricsRepository;
+use crate::database::{ArticlePredictionsRepository, ArticleRepository};
 use crate::web::routes;
 use axum::Router;
 use log::{error, info};
@@ -14,10 +17,9 @@ impl App {
             e
         })?;
 
-        let repository = ArticleRepository::new(
+        let db_client = DatabaseClient::new(
             &config.mongodb_connection_string,
             &config.mongodb_database_name,
-            &config.mongodb_collection_name,
         )
         .await
         .map_err(|e| {
@@ -25,7 +27,21 @@ impl App {
             e
         })?;
 
-        let router = routes::create_router(repository);
+        let articles_repository =
+            ArticleRepository::new(&db_client, &config.articles_collection_name);
+
+        let article_predictions_repository = ArticlePredictionsRepository::new(
+            &db_client,
+            &config.article_predictions_collection_name,
+        );
+
+        let deployment_repository =
+            DeploymentRepository::new(&db_client, &config.deployment_collection_name);
+
+        let metrics_repository =
+            MetricsRepository::new(&db_client, &config.metrics_collection_name);
+
+        let router = routes::create_router(articles_repository);
 
         info!("Application initialized successfully");
 

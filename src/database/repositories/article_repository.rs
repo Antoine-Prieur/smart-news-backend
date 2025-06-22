@@ -1,6 +1,8 @@
 use log::{error, info};
+use mongodb::Collection;
 use mongodb::bson::doc;
-use mongodb::{Client, Collection, Database};
+
+use crate::database::mongo_client::DatabaseClient;
 
 use super::models::article_repository_models::{ArticleDocument, PaginatedArticles};
 
@@ -10,23 +12,16 @@ pub struct ArticleRepository {
 }
 
 impl ArticleRepository {
-    pub async fn new(
-        connection_string: &str,
-        database_name: &str,
-        collection_name: &str,
-    ) -> Result<Self, mongodb::error::Error> {
-        let client = Client::with_uri_str(connection_string).await?;
-
-        let database: Database = client.database(database_name);
-
-        let collection: Collection<ArticleDocument> = database.collection(collection_name);
+    pub fn new(db_client: &DatabaseClient, collection_name: &str) -> Self {
+        let collection: Collection<ArticleDocument> =
+            db_client.get_database().collection(collection_name);
 
         info!(
-            "Connected to MongoDB database: {}, collection: {}",
-            database_name, collection_name
+            "Created ArticleRepository for collection: {}",
+            collection_name
         );
 
-        Ok(Self { collection })
+        Self { collection }
     }
 
     pub async fn list_articles(
