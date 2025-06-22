@@ -1,8 +1,8 @@
-use crate::database::models::ArticleDocument;
-use crate::database::models::PaginatedArticles;
 use log::{error, info};
 use mongodb::bson::doc;
 use mongodb::{Client, Collection, Database};
+
+use super::models::article_repository_models::{ArticleDocument, PaginatedArticles};
 
 #[derive(Clone)]
 pub struct ArticleRepository {
