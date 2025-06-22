@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::info;
 use mongodb::Collection;
 use mongodb::bson::{doc, oid::ObjectId};
 
@@ -22,33 +22,6 @@ impl ArticlePredictionsRepository {
         );
 
         Self { collection }
-    }
-
-    pub async fn find_by_article_id(
-        &self,
-        article_id: ObjectId,
-    ) -> Result<Vec<ArticlePredictionsDocument>, mongodb::error::Error> {
-        let filter = doc! { "article_id": article_id };
-
-        let mut cursor = self.collection.find(filter).await?;
-        let mut predictions = Vec::new();
-
-        while cursor.advance().await? {
-            match cursor.deserialize_current() {
-                Ok(prediction) => predictions.push(prediction),
-                Err(e) => {
-                    error!("Failed to deserialize prediction: {}", e);
-                    return Err(e);
-                }
-            }
-        }
-
-        info!(
-            "Found {} predictions for article {}",
-            predictions.len(),
-            article_id
-        );
-        Ok(predictions)
     }
 
     pub async fn find_by_article_id_and_prediction_type(

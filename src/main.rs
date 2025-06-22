@@ -1,6 +1,7 @@
 mod app;
 mod config;
 mod database;
+mod services;
 mod web;
 
 use app::App;

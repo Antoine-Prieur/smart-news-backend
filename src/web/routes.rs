@@ -1,10 +1,10 @@
 use super::handlers;
-use crate::database::ArticleRepository;
+use crate::services::article_service::ArticleService;
 use axum::{Router, routing::get};
 use http::Method;
 use tower_http::cors::{Any, CorsLayer};
 
-pub fn create_router(articles_repository: ArticleRepository) -> Router {
+pub fn create_router(article_service: ArticleService) -> Router {
     let cors = CorsLayer::new()
         .allow_origin([
             "http://localhost:3000".parse().unwrap(),
@@ -17,5 +17,5 @@ pub fn create_router(articles_repository: ArticleRepository) -> Router {
         .route("/articles", get(handlers::articles_handlers::get_articles))
         .route("/health", get(handlers::health_handlers::health_check))
         .layer(cors)
-        .with_state(articles_repository)
+        .with_state(article_service)
 }

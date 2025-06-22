@@ -20,10 +20,15 @@ pub struct ArticleDocument {
     pub description: Option<String>,
     pub url: Option<String>,
     pub url_to_image: Option<String>,
-    pub published_at: Option<String>,
+
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    pub published_at: DateTime<Utc>,
+
     pub content: Option<String>,
 
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
 

@@ -3,6 +3,7 @@ use crate::database::mongo_client::DatabaseClient;
 use crate::database::repositories::deployment_repository::DeploymentRepository;
 use crate::database::repositories::metrics_repository::MetricsRepository;
 use crate::database::{ArticlePredictionsRepository, ArticleRepository};
+use crate::services::article_service::ArticleService;
 use crate::web::routes;
 use axum::Router;
 use log::{error, info};
@@ -41,7 +42,10 @@ impl App {
         let metrics_repository =
             MetricsRepository::new(&db_client, &config.metrics_collection_name);
 
-        let router = routes::create_router(articles_repository);
+        let article_service =
+            ArticleService::new(articles_repository, article_predictions_repository);
+
+        let router = routes::create_router(article_service);
 
         info!("Application initialized successfully");
 

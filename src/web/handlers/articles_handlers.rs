@@ -5,7 +5,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::database::{ArticleDocument, ArticleRepository};
+use crate::{
+    database::ArticleDocument,
+    services::article_service::{ArticleService, SentimentAnalysis},
+};
 
 #[derive(Deserialize)]
 pub struct ArticlesQuery {
@@ -15,8 +18,22 @@ pub struct ArticlesQuery {
 }
 
 #[derive(Serialize)]
-pub struct PaginatedArticlesResponse {
-    pub articles: Vec<ArticleDocument>,
+pub struct ArticleWithSentimentResponse {
+    #[serde(flatten)]
+    pub article: ArticleDocument,
+
+    pub sentiment_analysis: Option<SentimentAnalysisResponse>,
+}
+
+#[derive(Serialize)]
+pub struct SentimentAnalysisResponse {
+    pub confidence: Option<f64>,
+    pub sentiment: String,
+}
+
+#[derive(Serialize)]
+pub struct PaginatedArticlesWithSentimentResponse {
+    pub articles: Vec<ArticleWithSentimentResponse>,
     pub total_count: u64,
     pub current_page_count: usize,
     pub page: u64,
@@ -24,35 +41,48 @@ pub struct PaginatedArticlesResponse {
     pub total_pages: u64,
 }
 
+impl From<SentimentAnalysis> for SentimentAnalysisResponse {
+    fn from(sentiment: SentimentAnalysis) -> Self {
+        Self {
+            confidence: sentiment.confidence,
+            sentiment: sentiment.sentiment,
+        }
+    }
+}
+
 pub async fn get_articles(
     Query(params): Query<ArticlesQuery>,
-    State(repository): State<ArticleRepository>,
-) -> Result<Json<PaginatedArticlesResponse>, StatusCode> {
+    State(service): State<ArticleService>,
+) -> Result<Json<PaginatedArticlesWithSentimentResponse>, StatusCode> {
     let published_at = params.published_at.as_deref();
 
-    match repository
-        .list_articles(params.limit, params.skip, published_at)
+    match service
+        .get_articles_with_sentiment(params.limit, params.skip, published_at)
         .await
     {
         Ok(paginated_articles) => {
-            let total_count = paginated_articles.total_count;
-            let current_page_count = paginated_articles.current_page_count;
-            let page = paginated_articles.page;
-            let per_page = paginated_articles.per_page;
-            let total_pages = paginated_articles.total_pages;
-            let response = PaginatedArticlesResponse {
-                articles: paginated_articles.articles,
-                total_count,
-                current_page_count,
-                page,
-                per_page,
-                total_pages,
+            let articles_response: Vec<ArticleWithSentimentResponse> = paginated_articles
+                .articles
+                .into_iter()
+                .map(|article_with_sentiment| ArticleWithSentimentResponse {
+                    article: article_with_sentiment.article,
+                    sentiment_analysis: article_with_sentiment.sentiment_analysis.map(|s| s.into()),
+                })
+                .collect();
+
+            let response = PaginatedArticlesWithSentimentResponse {
+                articles: articles_response,
+                total_count: paginated_articles.total_count,
+                current_page_count: paginated_articles.current_page_count,
+                page: paginated_articles.page,
+                per_page: paginated_articles.per_page,
+                total_pages: paginated_articles.total_pages,
             };
 
             Ok(Json(response))
         }
         Err(e) => {
-            log::error!("Database error: {}", e);
+            log::error!("Service error: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
