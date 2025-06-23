@@ -31,19 +31,18 @@ impl App {
         let articles_repository =
             ArticleRepository::new(&db_client, &config.articles_collection_name);
 
-        let article_predictions_repository = ArticlePredictionsRepository::new(
+        let _article_predictions_repository = ArticlePredictionsRepository::new(
             &db_client,
             &config.article_predictions_collection_name,
         );
 
-        let deployment_repository =
+        let _deployment_repository =
             DeploymentRepository::new(&db_client, &config.deployment_collection_name);
 
-        let metrics_repository =
+        let _metrics_repository =
             MetricsRepository::new(&db_client, &config.metrics_collection_name);
 
-        let article_service =
-            ArticleService::new(articles_repository, article_predictions_repository);
+        let article_service = ArticleService::new(articles_repository);
 
         let router = routes::create_router(article_service);
 

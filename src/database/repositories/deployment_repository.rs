@@ -62,7 +62,7 @@ impl DeploymentRepository {
                 info!("Found deployment with ID: {}", id);
                 Ok(Some(deployment))
             }
-            none => {
+            _none => {
                 info!("No deployment found with ID: {}", id);
                 Ok(None)
             }

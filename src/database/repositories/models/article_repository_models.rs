@@ -10,6 +10,12 @@ pub struct SourceDocument {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PredictionDocument {
+    pub prediction_confidence: Option<f64>,
+    pub prediction_value: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ArticleDocument {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
@@ -30,6 +36,9 @@ pub struct ArticleDocument {
     pub created_at: DateTime<Utc>,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sentiment_analysis: Option<PredictionDocument>,
 }
 
 #[derive(Debug, Clone)]
