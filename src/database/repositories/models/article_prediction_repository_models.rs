@@ -16,7 +16,9 @@ pub struct ArticlePredictionsDocument {
 
     pub article_id: ObjectId,
     pub prediction_type: String,
-    pub selected_prediction: ObjectId,
+
+    pub selected_predictor_id: ObjectId,
+    pub selected_prediction: PredictionDocument,
 
     pub predictions: HashMap<ObjectId, PredictionDocument>,
 

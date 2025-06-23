@@ -126,42 +126,36 @@ impl ArticleService {
         &self,
         prediction: ArticlePredictionsDocument,
     ) -> Option<SentimentAnalysis> {
-        let selected_prediction_id = prediction.selected_prediction;
+        // UPDATED: Now we access selected_prediction directly instead of looking it up in the HashMap
+        let selected_prediction = &prediction.selected_prediction;
 
-        if let Some(selected_prediction) = prediction.predictions.get(&selected_prediction_id) {
-            match &selected_prediction.prediction_value {
-                serde_json::Value::Object(obj) => {
-                    let sentiment = obj
-                        .get("sentiment")
-                        .or_else(|| obj.get("label"))
-                        .or_else(|| obj.get("classification"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("unknown")
-                        .to_string();
+        match &selected_prediction.prediction_value {
+            serde_json::Value::Object(obj) => {
+                // Try to extract sentiment from different possible field names
+                let sentiment = obj
+                    .get("sentiment")
+                    .or_else(|| obj.get("label"))
+                    .or_else(|| obj.get("classification"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
 
-                    Some(SentimentAnalysis {
-                        confidence: selected_prediction.prediction_confidence,
-                        sentiment,
-                    })
-                }
-                serde_json::Value::String(sentiment_str) => Some(SentimentAnalysis {
+                Some(SentimentAnalysis {
                     confidence: selected_prediction.prediction_confidence,
-                    sentiment: sentiment_str.clone(),
-                }),
-                _ => {
-                    warn!(
-                        "Unexpected prediction_value format for sentiment analysis: {:?}",
-                        selected_prediction.prediction_value
-                    );
-                    None
-                }
+                    sentiment,
+                })
             }
-        } else {
-            error!(
-                "Selected prediction ID {} not found in predictions HashMap",
-                selected_prediction_id
-            );
-            None
+            serde_json::Value::String(sentiment_str) => Some(SentimentAnalysis {
+                confidence: selected_prediction.prediction_confidence,
+                sentiment: sentiment_str.clone(),
+            }),
+            _ => {
+                warn!(
+                    "Unexpected prediction_value format for sentiment analysis: {:?}",
+                    selected_prediction.prediction_value
+                );
+                None
+            }
         }
     }
 }

@@ -53,9 +53,9 @@ impl App {
     }
 
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await?;
 
-        info!("Server starting on http://0.0.0.0:3000");
+        info!("Server starting on http://0.0.0.0:8000");
 
         axum::serve(listener, self.router).await?;
 
