@@ -101,14 +101,10 @@ impl ArticleRepository {
         let skip_count = skip.unwrap_or(0);
         let limit_count = limit.unwrap_or(20);
 
-        let mut lookup_match = doc! {
+        let lookup_match = doc! {
             "$expr": { "$eq": ["$article_id", "$$articleId"] },
             "prediction_type": "sentiment_analysis"
         };
-
-        if let Some(sentiment_value) = sentiment {
-            lookup_match.insert("selected_prediction.prediction_value", sentiment_value);
-        }
 
         let mut pipeline = vec![
             doc! {
@@ -131,11 +127,6 @@ impl ArticleRepository {
                 }
             },
             doc! {
-                "$match": {
-                    "prediction": { "$ne": [] }
-                }
-            },
-            doc! {
                 "$addFields": {
                     "sentiment_analysis": { "$arrayElemAt": ["$prediction.selected_prediction", 0] }
                 }
@@ -145,10 +136,19 @@ impl ArticleRepository {
                     "prediction": 0
                 }
             },
-            doc! {
-                "$sort": { "published_at": -1 }
-            },
         ];
+
+        if let Some(sentiment_value) = sentiment {
+            pipeline.push(doc! {
+                "$match": {
+                    "sentiment_analysis.prediction_value": sentiment_value
+                }
+            });
+        }
+
+        pipeline.push(doc! {
+            "$sort": { "published_at": -1 }
+        });
 
         pipeline.push(doc! {
             "$facet": {
