@@ -1,0 +1,105 @@
+[
+  {
+    $match: {
+      created_at: {
+        $gte: new Date(new Date().getTime() - 1 * 24 * 60 * 60 * 1000)
+      },
+      metric_name: "predictor_latency",
+    }
+  },
+  {
+    $facet: {
+      "stats": [
+        {
+          $group: {
+            _id: null,
+            min_value: { $min: "$metric_value" },
+            max_value: { $max: "$metric_value" }
+          }
+        }
+      ],
+      "data": [
+        { $project: { metric_value: 1 } }
+      ]
+    }
+  },
+  {
+    $project: {
+      stats: { $arrayElemAt: ["$stats", 0] },
+      data: "$data"
+    }
+  },
+  {
+    $unwind: "$data"
+  },
+  {
+    $addFields: {
+      bin_size: {
+        $divide: [
+          { $subtract: ["$stats.max_value", "$stats.min_value"] },
+          10
+        ]
+      }
+    }
+  },
+  {
+    $addFields: {
+      bin_index: {
+        $min: [
+          {
+            $floor: {
+              $divide: [
+                { $subtract: ["$data.metric_value", "$stats.min_value"] },
+                "$bin_size"
+              ]
+            }
+          },
+          10 - 1
+        ]
+      }
+    }
+  },
+  {
+    $addFields: {
+      bin_start: {
+        $add: [
+          "$stats.min_value",
+          { $multiply: ["$bin_index", "$bin_size"] }
+        ]
+      },
+      bin_end: {
+        $add: [
+          "$stats.min_value",
+          { $multiply: [{ $add: ["$bin_index", 1] }, "$bin_size"] }
+        ]
+      }
+    }
+  },
+  {
+    $group: {
+      _id: "$bin_index",
+      bin_start: { $first: "$bin_start" },
+      bin_end: { $first: "$bin_end" },
+      count: { $sum: 1 }
+    }
+  },
+  {
+    $sort: { _id: 1 }
+  },
+  {
+    $project: {
+      _id: 0,
+      bin_index: "$_id",
+      bin_range: {
+        $concat: [
+          "[",
+          { $toString: { $round: ["$bin_start", 4] } },
+          ", ",
+          { $toString: { $round: ["$bin_end", 4] } },
+          ")"
+        ]
+      },
+      count: 1
+    }
+  }
+]
