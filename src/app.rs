@@ -2,9 +2,11 @@ use crate::config::Config;
 use crate::database::mongo_client::DatabaseClient;
 use crate::database::repositories::deployment_repository::DeploymentRepository;
 use crate::database::repositories::metrics_repository::MetricsRepository;
+use crate::database::repositories::predictors_repository::PredictorRepository;
 use crate::database::{ArticlePredictionsRepository, ArticleRepository};
 use crate::services::article_service::ArticleService;
 use crate::services::metrics_service::MetricsService;
+use crate::services::predictor_service::PredictorService;
 use crate::web::routes::{self, AppState};
 use axum::Router;
 use log::{error, info};
@@ -44,15 +46,19 @@ impl App {
 
         let metrics_repository =
             MetricsRepository::new(&db_client, &config.metrics_collection_name);
+        let predictor_repository =
+            PredictorRepository::new(&db_client, &config.predictor_collection_name);
 
         // Create services
         let article_service = ArticleService::new(articles_repository);
         let metrics_service = MetricsService::new(metrics_repository);
+        let predictor_service = PredictorService::new(predictor_repository);
 
         // Create app state with both services
         let app_state = AppState {
             article_service,
             metrics_service,
+            predictor_service,
         };
 
         let router = routes::create_router(app_state);

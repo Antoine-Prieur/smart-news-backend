@@ -8,6 +8,7 @@ pub struct Config {
     pub article_predictions_collection_name: String,
     pub deployment_collection_name: String,
     pub metrics_collection_name: String,
+    pub predictor_collection_name: String,
 }
 
 impl Config {
@@ -26,6 +27,8 @@ impl Config {
                 .unwrap_or_else(|_| "deployments".to_string()),
             metrics_collection_name: env::var("METRICS_COLLECTION_NAME")
                 .unwrap_or_else(|_| "metrics".to_string()),
+            predictor_collection_name: env::var("PREDICTOR_COLLECTION_NAME")
+                .unwrap_or_else(|_| "predictors".to_string()),
         })
     }
 }

@@ -1,6 +1,7 @@
 use super::handlers;
 use crate::services::article_service::ArticleService;
 use crate::services::metrics_service::MetricsService;
+use crate::services::predictor_service::PredictorService;
 use axum::{Router, routing::get};
 use http::Method;
 use tower_http::cors::{Any, CorsLayer};
@@ -9,6 +10,7 @@ use tower_http::cors::{Any, CorsLayer};
 pub struct AppState {
     pub article_service: ArticleService,
     pub metrics_service: MetricsService,
+    pub predictor_service: PredictorService,
 }
 
 pub fn create_router(app_state: AppState) -> Router {
@@ -30,6 +32,14 @@ pub fn create_router(app_state: AppState) -> Router {
         .route(
             "/metrics/summary",
             get(handlers::metrics_handlers::get_metric_summary_aggregation),
+        )
+        .route(
+            "/predictors/types",
+            get(handlers::predictor_handlers::get_prediction_types),
+        )
+        .route(
+            "/predictors/versions",
+            get(handlers::predictor_handlers::get_predictor_versions),
         )
         .layer(cors)
         .with_state(app_state)
