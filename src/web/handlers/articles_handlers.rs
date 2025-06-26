@@ -5,7 +5,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{database::ArticleDocument, services::article_service::ArticleService};
+use crate::{database::ArticleDocument, web::routes::AppState};
 
 #[derive(Deserialize)]
 pub struct ArticlesQuery {
@@ -26,11 +26,12 @@ pub struct PaginatedArticlesResponse {
 
 pub async fn get_articles(
     Query(params): Query<ArticlesQuery>,
-    State(service): State<ArticleService>,
+    State(app_state): State<AppState>,
 ) -> Result<Json<PaginatedArticlesResponse>, StatusCode> {
     let sentiment = params.sentiment.as_deref();
 
-    match service
+    match app_state
+        .article_service
         .get_articles_with_sentiment(params.limit, params.skip, sentiment)
         .await
     {
