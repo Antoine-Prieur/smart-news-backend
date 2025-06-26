@@ -1,24 +1,16 @@
-use log::{error, info};
+use chrono::Utc;
+use log::info;
 use mongodb::Collection;
-use mongodb::bson::{doc, oid::ObjectId};
-use std::collections::HashMap;
+use mongodb::bson::doc;
 
 use crate::database::mongo_client::DatabaseClient;
+use crate::database::repositories::models::metrics_repository_models::MetricBinsAggregation;
 
-use super::models::metrics_repository_models::MetricsDocument;
+use super::models::metrics_repository_models::{MetricAggregation, MetricsDocument};
 
 #[derive(Clone)]
 pub struct MetricsRepository {
     collection: Collection<MetricsDocument>,
-}
-
-#[derive(Debug)]
-pub struct MetricAggregation {
-    pub avg_value: f64,
-    pub sum_value: f64,
-    pub count: i64,
-    pub min_value: f64,
-    pub max_value: f64,
 }
 
 impl MetricsRepository {
@@ -34,154 +26,7 @@ impl MetricsRepository {
         Self { collection }
     }
 
-    pub async fn find_by_metric_name(
-        &self,
-        metric_name: &str,
-        limit: Option<i64>,
-    ) -> Result<Vec<MetricsDocument>, mongodb::error::Error> {
-        let filter = doc! { "metric_name": metric_name };
-
-        let mut options = mongodb::options::FindOptions::default();
-        if let Some(limit_val) = limit {
-            options.limit = Some(limit_val);
-        }
-        options.sort = Some(doc! { "created_at": -1 });
-
-        let mut cursor = self
-            .collection
-            .find(filter)
-            .with_options(Some(options))
-            .await?;
-        let mut metrics = Vec::new();
-
-        while cursor.advance().await? {
-            match cursor.deserialize_current() {
-                Ok(metric) => metrics.push(metric),
-                Err(e) => {
-                    error!("Failed to deserialize metric: {}", e);
-                    return Err(e);
-                }
-            }
-        }
-
-        info!(
-            "Found {} metrics with name '{}'",
-            metrics.len(),
-            metric_name
-        );
-        Ok(metrics)
-    }
-
-    pub async fn find_by_tags(
-        &self,
-        tags: HashMap<String, String>,
-        limit: Option<i64>,
-    ) -> Result<Vec<MetricsDocument>, mongodb::error::Error> {
-        // Build filter for tags - MongoDB stores them as a subdocument
-        let mut filter = doc! {};
-        for (key, value) in tags {
-            filter.insert(format!("tags.{}", key), value);
-        }
-
-        let mut options = mongodb::options::FindOptions::default();
-        if let Some(limit_val) = limit {
-            options.limit = Some(limit_val);
-        }
-        options.sort = Some(doc! { "created_at": -1 });
-
-        let mut cursor = self
-            .collection
-            .find(filter)
-            .with_options(Some(options))
-            .await?;
-        let mut metrics = Vec::new();
-
-        while cursor.advance().await? {
-            match cursor.deserialize_current() {
-                Ok(metric) => metrics.push(metric),
-                Err(e) => {
-                    error!("Failed to deserialize metric: {}", e);
-                    return Err(e);
-                }
-            }
-        }
-
-        info!(
-            "Found {} metrics matching the specified tags",
-            metrics.len()
-        );
-        Ok(metrics)
-    }
-
-    pub async fn find_by_id(
-        &self,
-        id: ObjectId,
-    ) -> Result<Option<MetricsDocument>, mongodb::error::Error> {
-        let filter = doc! { "_id": id };
-
-        match self.collection.find_one(filter).await? {
-            Some(metric) => {
-                info!("Found metric with ID: {}", id);
-                Ok(Some(metric))
-            }
-            None => {
-                info!("No metric found with ID: {}", id);
-                Ok(None)
-            }
-        }
-    }
-
-    pub async fn find_by_time_range(
-        &self,
-        start_time: chrono::DateTime<chrono::Utc>,
-        end_time: chrono::DateTime<chrono::Utc>,
-        metric_name: Option<&str>,
-        limit: Option<i64>,
-    ) -> Result<Vec<MetricsDocument>, mongodb::error::Error> {
-        let mut filter = doc! {
-            "created_at": {
-                "$gte": start_time,
-                "$lte": end_time
-            }
-        };
-
-        if let Some(name) = metric_name {
-            filter.insert("metric_name", name);
-        }
-
-        let mut options = mongodb::options::FindOptions::default();
-        if let Some(limit_val) = limit {
-            options.limit = Some(limit_val);
-        }
-        options.sort = Some(doc! { "created_at": -1 });
-
-        let mut cursor = self
-            .collection
-            .find(filter)
-            .with_options(Some(options))
-            .await?;
-        let mut metrics = Vec::new();
-
-        while cursor.advance().await? {
-            match cursor.deserialize_current() {
-                Ok(metric) => metrics.push(metric),
-                Err(e) => {
-                    error!("Failed to deserialize metric: {}", e);
-                    return Err(e);
-                }
-            }
-        }
-
-        info!(
-            "Found {} metrics in time range {} to {}",
-            metrics.len(),
-            start_time,
-            end_time
-        );
-        Ok(metrics)
-    }
-
-    pub async fn get_metric_aggregation(
+    pub async fn get_metric_summary_aggregation(
         &self,
         metric_name: &str,
         start_time: Option<chrono::DateTime<chrono::Utc>>,
@@ -220,7 +65,10 @@ impl MetricsRepository {
             let aggregation = MetricAggregation {
                 avg_value: doc.get_f64("avg_value").unwrap_or(0.0),
                 sum_value: doc.get_f64("sum_value").unwrap_or(0.0),
-                count: doc.get_i64("count").unwrap_or(0),
+                count: doc
+                    .get_i32("count")
+                    .map(|v| v as i64)
+                    .unwrap_or_else(|_| doc.get_i64("count").unwrap_or(0)),
                 min_value: doc.get_f64("min_value").unwrap_or(0.0),
                 max_value: doc.get_f64("max_value").unwrap_or(0.0),
             };
@@ -231,5 +79,154 @@ impl MetricsRepository {
             info!("No data found for metric '{}'", metric_name);
             Ok(None)
         }
+    }
+
+    pub async fn get_metric_bins_aggregation(
+        &self,
+        metric_name: &str,
+        num_bins: i32,
+        prediction_type: Option<&str>,
+        num_days: Option<i32>,
+    ) -> Result<Vec<MetricBinsAggregation>, mongodb::error::Error> {
+        let start_time = Utc::now() - chrono::Duration::days(num_days.unwrap_or(7) as i64);
+
+        let mut match_doc = doc! {
+            "created_at": {
+                "$gte": start_time
+            },
+            "metric_name": metric_name
+        };
+
+        if let Some(name) = prediction_type {
+            match_doc.insert("tags.prediction_type", name);
+        }
+
+        let pipeline = vec![
+            doc! {
+            "$match":  match_doc
+
+            },
+            doc! {
+                "$facet": {
+                    "stats": [
+                        {
+                            "$group": {
+                                "_id": null,
+                                "min_value": { "$min": "$metric_value" },
+                                "max_value": { "$max": "$metric_value" }
+                            }
+                        }
+                    ],
+                    "data": [
+                        { "$project": { "metric_value": 1 } }
+                    ]
+                }
+            },
+            doc! {
+                "$project": {
+                    "stats": { "$arrayElemAt": ["$stats", 0] },
+                    "data": "$data"
+                }
+            },
+            doc! {
+                "$unwind": "$data"
+            },
+            doc! {
+                "$addFields": {
+                    "bin_size": {
+                        "$divide": [
+                            { "$subtract": ["$stats.max_value", "$stats.min_value"] },
+                            num_bins
+                        ]
+                    }
+                }
+            },
+            doc! {
+                "$addFields": {
+                    "bin_index": {
+                        "$min": [
+                            {
+                                "$floor": {
+                                    "$divide": [
+                                        { "$subtract": ["$data.metric_value", "$stats.min_value"] },
+                                        "$bin_size"
+                                    ]
+                                }
+                            },
+                            num_bins - 1
+                        ]
+                    }
+                }
+            },
+            doc! {
+                "$addFields": {
+                    "bin_start": {
+                        "$add": [
+                            "$stats.min_value",
+                            { "$multiply": ["$bin_index", "$bin_size"] }
+                        ]
+                    },
+                    "bin_end": {
+                        "$add": [
+                            "$stats.min_value",
+                            { "$multiply": [{ "$add": ["$bin_index", 1] }, "$bin_size"] }
+                        ]
+                    }
+                }
+            },
+            doc! {
+                "$group": {
+                    "_id": "$bin_index",
+                    "bin_start": { "$first": "$bin_start" },
+                    "bin_end": { "$first": "$bin_end" },
+                    "count": { "$sum": 1 }
+                }
+            },
+            doc! {
+                "$sort": { "_id": 1 }
+            },
+            doc! {
+                "$project": {
+                    "_id": 0,
+                    "bin_index": "$_id",
+                    "bin_range": {
+                        "$concat": [
+                            "[",
+                            { "$toString": { "$round": ["$bin_start", 4] } },
+                            ", ",
+                            { "$toString": { "$round": ["$bin_end", 4] } },
+                            ")"
+                        ]
+                    },
+                    "count": 1
+                }
+            },
+        ];
+
+        let mut cursor = self.collection.aggregate(pipeline).await?;
+        let mut histogram_bins = Vec::new();
+
+        while cursor.advance().await? {
+            let doc = cursor.current();
+            let bin = MetricBinsAggregation {
+                bin_index: doc.get_f64("bin_index").unwrap_or(0.0) as i32,
+                bin_range: doc.get_str("bin_range").unwrap_or("").to_string(),
+                count: doc
+                    .get_i32("count")
+                    .map(|v| v as i64)
+                    .unwrap_or_else(|_| doc.get_i64("count").unwrap_or(0)),
+            };
+            histogram_bins.push(bin);
+        }
+
+        info!(
+            "Generated histogram with {} bins for metric '{}' and predictor_type '{}' over {} days",
+            histogram_bins.len(),
+            metric_name,
+            prediction_type.unwrap_or(""),
+            num_days.unwrap_or(7)
+        );
+
+        Ok(histogram_bins)
     }
 }

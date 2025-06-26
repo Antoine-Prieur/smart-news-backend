@@ -5,21 +5,22 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::database::repositories::models::metrics_repository_models::MetricsDocument;
+use crate::database::repositories::models::metrics_repository_models::MetricBinsAggregation;
 use crate::web::routes::AppState;
 
 #[derive(Deserialize)]
 pub struct MetricsQuery {
     pub metric_name: Option<String>,
-    pub limit: Option<i64>,
     pub start_time: Option<String>,
     pub end_time: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct MetricsResponse {
-    pub metrics: Vec<MetricsDocument>,
-    pub count: usize,
+#[derive(Deserialize)]
+pub struct MetricBinsQuery {
+    pub metric_name: Option<String>,
+    pub num_bins: Option<i32>,
+    pub prediction_type: Option<String>,
+    pub num_days: Option<i32>,
 }
 
 #[derive(Serialize)]
@@ -32,30 +33,12 @@ pub struct MetricAggregationResponse {
     pub max_value: f64,
 }
 
-pub async fn get_metrics(
-    Query(params): Query<MetricsQuery>,
-    State(app_state): State<AppState>,
-) -> Result<Json<MetricsResponse>, StatusCode> {
-    match app_state
-        .metrics_service
-        .get_metrics(params.metric_name.as_deref(), params.limit)
-        .await
-    {
-        Ok(metrics) => {
-            let response = MetricsResponse {
-                count: metrics.len(),
-                metrics,
-            };
-            Ok(Json(response))
-        }
-        Err(e) => {
-            log::error!("Service error: {}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
+#[derive(Serialize)]
+pub struct MetricBinsAggregationResponse {
+    pub metric_bins: Vec<MetricBinsAggregation>,
 }
 
-pub async fn get_metric_aggregation(
+pub async fn get_metric_summary_aggregation(
     Query(params): Query<MetricsQuery>,
     State(app_state): State<AppState>,
 ) -> Result<Json<MetricAggregationResponse>, StatusCode> {
@@ -99,6 +82,43 @@ pub async fn get_metric_aggregation(
             Ok(Json(response))
         }
         Ok(_none) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            log::error!("Service error: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+pub async fn get_metric_bins_aggregation(
+    Query(params): Query<MetricBinsQuery>,
+    State(app_state): State<AppState>,
+) -> Result<Json<MetricBinsAggregationResponse>, StatusCode> {
+    let metric_name = match params.metric_name {
+        Some(name) => name,
+        _none => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    let num_bins = match params.num_bins {
+        Some(num) => num,
+        _none => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    match app_state
+        .metrics_service
+        .get_metric_bins_aggregation(
+            &metric_name,
+            num_bins,
+            params.prediction_type.as_deref(),
+            params.num_days,
+        )
+        .await
+    {
+        Ok(aggregation) => {
+            let response = MetricBinsAggregationResponse {
+                metric_bins: aggregation,
+            };
+            Ok(Json(response))
+        }
         Err(e) => {
             log::error!("Service error: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)

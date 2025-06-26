@@ -18,3 +18,19 @@ pub struct MetricsDocument {
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Debug)]
+pub struct MetricAggregation {
+    pub avg_value: f64,
+    pub sum_value: f64,
+    pub count: i64,
+    pub min_value: f64,
+    pub max_value: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MetricBinsAggregation {
+    pub bin_index: i32,
+    pub bin_range: String,
+    pub count: i64,
+}

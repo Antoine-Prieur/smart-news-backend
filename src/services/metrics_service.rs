@@ -1,5 +1,7 @@
-use crate::database::repositories::metrics_repository::{MetricAggregation, MetricsRepository};
-use crate::database::repositories::models::metrics_repository_models::MetricsDocument;
+use crate::database::repositories::metrics_repository::MetricsRepository;
+use crate::database::repositories::models::metrics_repository_models::{
+    MetricAggregation, MetricBinsAggregation,
+};
 use log::{error, info};
 
 #[derive(Clone)]
@@ -13,30 +15,6 @@ impl MetricsService {
         Self { metrics_repository }
     }
 
-    pub async fn get_metrics(
-        &self,
-        metric_name: Option<&str>,
-        limit: Option<i64>,
-    ) -> Result<Vec<MetricsDocument>, Box<dyn std::error::Error>> {
-        info!("Getting metrics with optional filter");
-
-        let metrics = if let Some(name) = metric_name {
-            self.metrics_repository
-                .find_by_metric_name(name, limit)
-                .await
-                .map_err(|e| {
-                    error!("Failed to get metrics by name '{}': {}", name, e);
-                    Box::new(e) as Box<dyn std::error::Error>
-                })?
-        } else {
-            info!("No metric name specified, returning empty result");
-            Vec::new()
-        };
-
-        info!("Successfully retrieved {} metrics", metrics.len());
-        Ok(metrics)
-    }
-
     pub async fn get_metric_aggregation(
         &self,
         metric_name: &str,
@@ -47,7 +25,7 @@ impl MetricsService {
 
         let aggregation = self
             .metrics_repository
-            .get_metric_aggregation(metric_name, start_time, end_time)
+            .get_metric_summary_aggregation(metric_name, start_time, end_time)
             .await
             .map_err(|e| {
                 error!(
@@ -62,6 +40,33 @@ impl MetricsService {
         } else {
             info!("No data found for metric '{}'", metric_name);
         }
+
+        Ok(aggregation)
+    }
+
+    pub async fn get_metric_bins_aggregation(
+        &self,
+        metric_name: &str,
+        num_bins: i32,
+        prediction_type: Option<&str>,
+        num_days: Option<i32>,
+    ) -> Result<Vec<MetricBinsAggregation>, Box<dyn std::error::Error>> {
+        let aggregation = self
+            .metrics_repository
+            .get_metric_bins_aggregation(metric_name, num_bins, prediction_type, num_days)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to get metric bin aggregation for '{}': {}",
+                    metric_name, e
+                );
+                Box::new(e) as Box<dyn std::error::Error>
+            })?;
+
+        info!(
+            "Successfully calculated aggregation bin for '{}'",
+            metric_name
+        );
 
         Ok(aggregation)
     }
