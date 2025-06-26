@@ -1,6 +1,6 @@
 use crate::database::repositories::metrics_repository::MetricsRepository;
 use crate::database::repositories::models::metrics_repository_models::{
-    MetricAggregation, MetricBinsAggregation,
+    MetricBinsAggregation, MetricSummaryAggregation,
 };
 use log::{error, info};
 
@@ -18,14 +18,20 @@ impl MetricsService {
     pub async fn get_metric_aggregation(
         &self,
         metric_name: &str,
-        start_time: Option<chrono::DateTime<chrono::Utc>>,
-        end_time: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> Result<Option<MetricAggregation>, Box<dyn std::error::Error>> {
+        prediction_type: Option<&str>,
+        predictor_version: Option<i32>,
+        num_days: Option<i32>,
+    ) -> Result<Option<MetricSummaryAggregation>, Box<dyn std::error::Error>> {
         info!("Getting metric aggregation for '{}'", metric_name);
 
         let aggregation = self
             .metrics_repository
-            .get_metric_summary_aggregation(metric_name, start_time, end_time)
+            .get_metric_summary_aggregation(
+                metric_name,
+                prediction_type,
+                predictor_version,
+                num_days,
+            )
             .await
             .map_err(|e| {
                 error!(
@@ -49,11 +55,18 @@ impl MetricsService {
         metric_name: &str,
         num_bins: i32,
         prediction_type: Option<&str>,
+        predictor_version: Option<i32>,
         num_days: Option<i32>,
     ) -> Result<Vec<MetricBinsAggregation>, Box<dyn std::error::Error>> {
         let aggregation = self
             .metrics_repository
-            .get_metric_bins_aggregation(metric_name, num_bins, prediction_type, num_days)
+            .get_metric_bins_aggregation(
+                metric_name,
+                num_bins,
+                prediction_type,
+                predictor_version,
+                num_days,
+            )
             .await
             .map_err(|e| {
                 error!(

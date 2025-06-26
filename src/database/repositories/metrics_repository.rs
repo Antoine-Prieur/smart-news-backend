@@ -6,7 +6,7 @@ use mongodb::bson::doc;
 use crate::database::mongo_client::DatabaseClient;
 use crate::database::repositories::models::metrics_repository_models::MetricBinsAggregation;
 
-use super::models::metrics_repository_models::{MetricAggregation, MetricsDocument};
+use super::models::metrics_repository_models::{MetricSummaryAggregation, MetricsDocument};
 
 #[derive(Clone)]
 pub struct MetricsRepository {
@@ -29,23 +29,29 @@ impl MetricsRepository {
     pub async fn get_metric_summary_aggregation(
         &self,
         metric_name: &str,
-        start_time: Option<chrono::DateTime<chrono::Utc>>,
-        end_time: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> Result<Option<MetricAggregation>, mongodb::error::Error> {
-        let mut match_stage = doc! { "metric_name": metric_name };
+        prediction_type: Option<&str>,
+        predictor_version: Option<i32>,
+        num_days: Option<i32>,
+    ) -> Result<Option<MetricSummaryAggregation>, mongodb::error::Error> {
+        let start_time = Utc::now() - chrono::Duration::days(num_days.unwrap_or(7) as i64);
 
-        if let (Some(start), Some(end)) = (start_time, end_time) {
-            match_stage.insert(
-                "created_at",
-                doc! {
-                    "$gte": start,
-                    "$lte": end
-                },
-            );
+        let mut match_doc = doc! {
+            "created_at": {
+                "$gte": start_time
+            },
+            "metric_name": metric_name
+        };
+
+        if let Some(name) = prediction_type {
+            match_doc.insert("tags.prediction_type", name);
+        }
+
+        if let Some(name) = predictor_version {
+            match_doc.insert("tags.predictor_version", name);
         }
 
         let pipeline = vec![
-            doc! { "$match": match_stage },
+            doc! { "$match": match_doc },
             doc! {
                 "$group": {
                     "_id": null,
@@ -62,7 +68,7 @@ impl MetricsRepository {
 
         if cursor.advance().await? {
             let doc = cursor.current();
-            let aggregation = MetricAggregation {
+            let aggregation = MetricSummaryAggregation {
                 avg_value: doc.get_f64("avg_value").unwrap_or(0.0),
                 sum_value: doc.get_f64("sum_value").unwrap_or(0.0),
                 count: doc
@@ -86,6 +92,7 @@ impl MetricsRepository {
         metric_name: &str,
         num_bins: i32,
         prediction_type: Option<&str>,
+        predictor_version: Option<i32>,
         num_days: Option<i32>,
     ) -> Result<Vec<MetricBinsAggregation>, mongodb::error::Error> {
         let start_time = Utc::now() - chrono::Duration::days(num_days.unwrap_or(7) as i64);
@@ -101,10 +108,13 @@ impl MetricsRepository {
             match_doc.insert("tags.prediction_type", name);
         }
 
+        if let Some(name) = predictor_version {
+            match_doc.insert("tags.predictor_version", name);
+        }
+
         let pipeline = vec![
             doc! {
-            "$match":  match_doc
-
+                "$match": match_doc
             },
             doc! {
                 "$facet": {
@@ -119,18 +129,36 @@ impl MetricsRepository {
                     ],
                     "data": [
                         { "$project": { "metric_value": 1 } }
+                    ],
+                    // Generate all possible bins
+                    "all_bins": [
+                        {
+                            "$limit": 1
+                        },
+                        {
+                            "$project": {
+                                "bins": { "$range": [0, num_bins] }
+                            }
+                        },
+                        {
+                            "$unwind": "$bins"
+                        },
+                        {
+                            "$project": {
+                                "bin_index": "$bins"
+                            }
+                        }
                     ]
                 }
             },
             doc! {
                 "$project": {
                     "stats": { "$arrayElemAt": ["$stats", 0] },
-                    "data": "$data"
+                    "data": "$data",
+                    "all_bins": "$all_bins"
                 }
             },
-            doc! {
-                "$unwind": "$data"
-            },
+            // Calculate bin_size once
             doc! {
                 "$addFields": {
                     "bin_size": {
@@ -141,63 +169,107 @@ impl MetricsRepository {
                     }
                 }
             },
+            // Process actual data to get counts per bin
+            doc! {
+                "$facet": {
+                    "actual_bins": [
+                        {
+                            "$unwind": "$data"
+                        },
+                        {
+                            "$addFields": {
+                                "bin_index": {
+                                    "$min": [
+                                        {
+                                            "$floor": {
+                                                "$divide": [
+                                                    { "$subtract": ["$data.metric_value", "$stats.min_value"] },
+                                                    "$bin_size"
+                                                ]
+                                            }
+                                        },
+                                        num_bins - 1
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "$group": {
+                                "_id": "$bin_index",
+                                "count": { "$sum": 1 }
+                            }
+                        }
+                    ],
+                    "bin_metadata": [
+                        {
+                            "$project": {
+                                "stats": 1,
+                                "bin_size": 1,
+                                "all_bins": 1
+                            }
+                        }
+                    ]
+                }
+            },
+            doc! {
+                "$project": {
+                    "actual_bins": 1,
+                    "metadata": { "$arrayElemAt": ["$bin_metadata", 0] }
+                }
+            },
+            doc! {
+                "$unwind": "$metadata.all_bins"
+            },
+            // Left join all possible bins with actual data
             doc! {
                 "$addFields": {
-                    "bin_index": {
-                        "$min": [
-                            {
-                                "$floor": {
-                                    "$divide": [
-                                        { "$subtract": ["$data.metric_value", "$stats.min_value"] },
-                                        "$bin_size"
+                    "bin_index": "$metadata.all_bins.bin_index",
+                    "count": {
+                        "$let": {
+                            "vars": {
+                                "matching_bin": {
+                                    "$arrayElemAt": [
+                                        {
+                                            "$filter": {
+                                                "input": "$actual_bins",
+                                                "cond": { "$eq": ["$$this._id", "$metadata.all_bins.bin_index"] }
+                                            }
+                                        },
+                                        0
                                     ]
                                 }
                             },
-                            num_bins - 1
-                        ]
+                            "in": { "$ifNull": ["$$matching_bin.count", 0] }
+                        }
                     }
                 }
             },
+            // Calculate bin ranges
             doc! {
                 "$addFields": {
                     "bin_start": {
                         "$add": [
-                            "$stats.min_value",
-                            { "$multiply": ["$bin_index", "$bin_size"] }
+                            "$metadata.stats.min_value",
+                            { "$multiply": ["$bin_index", "$metadata.bin_size"] }
                         ]
                     },
                     "bin_end": {
                         "$add": [
-                            "$stats.min_value",
-                            { "$multiply": [{ "$add": ["$bin_index", 1] }, "$bin_size"] }
+                            "$metadata.stats.min_value",
+                            { "$multiply": [{ "$add": ["$bin_index", 1] }, "$metadata.bin_size"] }
                         ]
                     }
                 }
             },
             doc! {
-                "$group": {
-                    "_id": "$bin_index",
-                    "bin_start": { "$first": "$bin_start" },
-                    "bin_end": { "$first": "$bin_end" },
-                    "count": { "$sum": 1 }
-                }
-            },
-            doc! {
-                "$sort": { "_id": 1 }
+                "$sort": { "bin_index": 1 }
             },
             doc! {
                 "$project": {
                     "_id": 0,
-                    "bin_index": "$_id",
-                    "bin_range": {
-                        "$concat": [
-                            "[",
-                            { "$toString": { "$round": ["$bin_start", 4] } },
-                            ", ",
-                            { "$toString": { "$round": ["$bin_end", 4] } },
-                            ")"
-                        ]
-                    },
+                    "bin_index": 1,
+                    "bin_start": { "$round": ["$bin_start", 4] },
+                    "bin_end": { "$round": ["$bin_end", 4] },
                     "count": 1
                 }
             },
@@ -209,8 +281,9 @@ impl MetricsRepository {
         while cursor.advance().await? {
             let doc = cursor.current();
             let bin = MetricBinsAggregation {
-                bin_index: doc.get_f64("bin_index").unwrap_or(0.0) as i32,
-                bin_range: doc.get_str("bin_range").unwrap_or("").to_string(),
+                bin_index: doc.get_i32("bin_index").unwrap_or(0),
+                bin_start: doc.get_f64("bin_start").unwrap_or(0.0),
+                bin_end: doc.get_f64("bin_end").unwrap_or(0.0),
                 count: doc
                     .get_i32("count")
                     .map(|v| v as i64)

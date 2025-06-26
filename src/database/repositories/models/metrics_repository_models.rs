@@ -20,7 +20,7 @@ pub struct MetricsDocument {
 }
 
 #[derive(Debug)]
-pub struct MetricAggregation {
+pub struct MetricSummaryAggregation {
     pub avg_value: f64,
     pub sum_value: f64,
     pub count: i64,
@@ -28,9 +28,10 @@ pub struct MetricAggregation {
     pub max_value: f64,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricBinsAggregation {
     pub bin_index: i32,
-    pub bin_range: String,
+    pub bin_start: f64,
+    pub bin_end: f64,
     pub count: i64,
 }

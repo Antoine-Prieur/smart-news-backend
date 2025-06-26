@@ -9,10 +9,11 @@ use crate::database::repositories::models::metrics_repository_models::MetricBins
 use crate::web::routes::AppState;
 
 #[derive(Deserialize)]
-pub struct MetricsQuery {
+pub struct MetricsSummaryQuery {
     pub metric_name: Option<String>,
-    pub start_time: Option<String>,
-    pub end_time: Option<String>,
+    pub prediction_type: Option<String>,
+    pub predictor_version: Option<i32>,
+    pub num_days: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -20,6 +21,7 @@ pub struct MetricBinsQuery {
     pub metric_name: Option<String>,
     pub num_bins: Option<i32>,
     pub prediction_type: Option<String>,
+    pub predictor_version: Option<i32>,
     pub num_days: Option<i32>,
 }
 
@@ -39,27 +41,9 @@ pub struct MetricBinsAggregationResponse {
 }
 
 pub async fn get_metric_summary_aggregation(
-    Query(params): Query<MetricsQuery>,
+    Query(params): Query<MetricsSummaryQuery>,
     State(app_state): State<AppState>,
 ) -> Result<Json<MetricAggregationResponse>, StatusCode> {
-    let start_time = if let Some(start_str) = params.start_time {
-        match start_str.parse::<chrono::DateTime<chrono::Utc>>() {
-            Ok(dt) => Some(dt),
-            Err(_) => return Err(StatusCode::BAD_REQUEST),
-        }
-    } else {
-        None
-    };
-
-    let end_time = if let Some(end_str) = params.end_time {
-        match end_str.parse::<chrono::DateTime<chrono::Utc>>() {
-            Ok(dt) => Some(dt),
-            Err(_) => return Err(StatusCode::BAD_REQUEST),
-        }
-    } else {
-        None
-    };
-
     let metric_name = match params.metric_name {
         Some(name) => name,
         _none => return Err(StatusCode::BAD_REQUEST),
@@ -67,7 +51,12 @@ pub async fn get_metric_summary_aggregation(
 
     match app_state
         .metrics_service
-        .get_metric_aggregation(&metric_name, start_time, end_time)
+        .get_metric_aggregation(
+            &metric_name,
+            params.prediction_type.as_deref(),
+            params.predictor_version,
+            params.num_days,
+        )
         .await
     {
         Ok(Some(aggregation)) => {
@@ -109,6 +98,7 @@ pub async fn get_metric_bins_aggregation(
             &metric_name,
             num_bins,
             params.prediction_type.as_deref(),
+            params.predictor_version,
             params.num_days,
         )
         .await
