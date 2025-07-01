@@ -34,6 +34,10 @@ pub fn create_router(app_state: AppState) -> Router {
             get(handlers::metrics_handlers::get_metric_summary_aggregation),
         )
         .route(
+            "/predictors",
+            get(handlers::predictor_handlers::get_predictors),
+        )
+        .route(
             "/predictors/types",
             get(handlers::predictor_handlers::get_prediction_types),
         )

@@ -123,14 +123,14 @@ impl MetricsRepository {
                             "$group": {
                                 "_id": null,
                                 "min_value": { "$min": "$metric_value" },
-                                "max_value": { "$max": "$metric_value" }
+                                "max_value": { "$max": "$metric_value" },
+                                "count": { "$sum": 1 }
                             }
                         }
                     ],
                     "data": [
                         { "$project": { "metric_value": 1 } }
                     ],
-                    // Generate all possible bins
                     "all_bins": [
                         {
                             "$limit": 1
@@ -158,18 +158,27 @@ impl MetricsRepository {
                     "all_bins": "$all_bins"
                 }
             },
-            // Calculate bin_size once
             doc! {
                 "$addFields": {
                     "bin_size": {
-                        "$divide": [
-                            { "$subtract": ["$stats.max_value", "$stats.min_value"] },
-                            num_bins
-                        ]
+                        "$cond": {
+                            "if": {
+                                "$or": [
+                                    { "$eq": ["$stats.count", 1] },
+                                    { "$eq": ["$stats.min_value", "$stats.max_value"] }
+                                ]
+                            },
+                            "then": 1.0,
+                            "else": {
+                                "$divide": [
+                                    { "$subtract": ["$stats.max_value", "$stats.min_value"] },
+                                    num_bins
+                                ]
+                            }
+                        }
                     }
                 }
             },
-            // Process actual data to get counts per bin
             doc! {
                 "$facet": {
                     "actual_bins": [
@@ -179,17 +188,28 @@ impl MetricsRepository {
                         {
                             "$addFields": {
                                 "bin_index": {
-                                    "$min": [
-                                        {
-                                            "$floor": {
-                                                "$divide": [
-                                                    { "$subtract": ["$data.metric_value", "$stats.min_value"] },
-                                                    "$bin_size"
-                                                ]
-                                            }
+                                    "$cond": {
+                                        "if": {
+                                            "$or": [
+                                                { "$eq": ["$stats.count", 1] },
+                                                { "$eq": ["$stats.min_value", "$stats.max_value"] }
+                                            ]
                                         },
-                                        num_bins - 1
-                                    ]
+                                        "then": 0,
+                                        "else": {
+                                            "$min": [
+                                                {
+                                                    "$floor": {
+                                                        "$divide": [
+                                                            { "$subtract": ["$data.metric_value", "$stats.min_value"] },
+                                                            "$bin_size"
+                                                        ]
+                                                    }
+                                                },
+                                                num_bins - 1
+                                            ]
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -220,7 +240,6 @@ impl MetricsRepository {
             doc! {
                 "$unwind": "$metadata.all_bins"
             },
-            // Left join all possible bins with actual data
             doc! {
                 "$addFields": {
                     "bin_index": "$metadata.all_bins.bin_index",
@@ -244,20 +263,41 @@ impl MetricsRepository {
                     }
                 }
             },
-            // Calculate bin ranges
             doc! {
                 "$addFields": {
                     "bin_start": {
-                        "$add": [
-                            "$metadata.stats.min_value",
-                            { "$multiply": ["$bin_index", "$metadata.bin_size"] }
-                        ]
+                        "$cond": {
+                            "if": {
+                                "$or": [
+                                    { "$eq": ["$metadata.stats.count", 1] },
+                                    { "$eq": ["$metadata.stats.min_value", "$metadata.stats.max_value"] }
+                                ]
+                            },
+                            "then": "$metadata.stats.min_value",
+                            "else": {
+                                "$add": [
+                                    "$metadata.stats.min_value",
+                                    { "$multiply": ["$bin_index", "$metadata.bin_size"] }
+                                ]
+                            }
+                        }
                     },
                     "bin_end": {
-                        "$add": [
-                            "$metadata.stats.min_value",
-                            { "$multiply": [{ "$add": ["$bin_index", 1] }, "$metadata.bin_size"] }
-                        ]
+                        "$cond": {
+                            "if": {
+                                "$or": [
+                                    { "$eq": ["$metadata.stats.count", 1] },
+                                    { "$eq": ["$metadata.stats.min_value", "$metadata.stats.max_value"] }
+                                ]
+                            },
+                            "then": "$metadata.stats.max_value",
+                            "else": {
+                                "$add": [
+                                    "$metadata.stats.min_value",
+                                    { "$multiply": [{ "$add": ["$bin_index", 1] }, "$metadata.bin_size"] }
+                                ]
+                            }
+                        }
                     }
                 }
             },

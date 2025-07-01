@@ -9,6 +9,8 @@ pub struct PredictorDocument {
 
     pub prediction_type: String,
     pub predictor_version: i32,
+    pub predictor_description: String,
+    pub traffic_percentage: i32,
 
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,

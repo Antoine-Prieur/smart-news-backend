@@ -90,4 +90,45 @@ impl PredictorRepository {
 
         Ok(predictor_versions)
     }
+
+    pub async fn get_predictors_by_type(
+        &self,
+        prediction_type: &str,
+        min_traffic: Option<i32>,
+    ) -> Result<Vec<PredictorDocument>, mongodb::error::Error> {
+        let mut filter = doc! { "prediction_type": prediction_type };
+
+        if let Some(min_traffic_value) = min_traffic {
+            filter.insert("traffic_percentage", doc! { "$gte": min_traffic_value });
+        }
+
+        let mut options = mongodb::options::FindOptions::default();
+        options.sort = Some(doc! { "predictor_version": 1 });
+
+        let mut cursor = self
+            .collection
+            .find(filter)
+            .with_options(Some(options))
+            .await?;
+
+        let mut predictors = Vec::new();
+
+        while cursor.advance().await? {
+            match cursor.deserialize_current() {
+                Ok(predictor) => predictors.push(predictor),
+                Err(e) => {
+                    log::error!("Failed to deserialize predictor: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+
+        info!(
+            "Found {} predictors for prediction type '{}'",
+            predictors.len(),
+            prediction_type
+        );
+
+        Ok(predictors)
+    }
 }
