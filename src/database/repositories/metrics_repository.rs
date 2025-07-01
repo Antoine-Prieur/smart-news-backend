@@ -30,7 +30,7 @@ impl MetricsRepository {
         &self,
         metric_name: &str,
         prediction_type: Option<&str>,
-        predictor_version: Option<i32>,
+        predictor_version: Option<&str>,
         num_days: Option<i32>,
     ) -> Result<Option<MetricSummaryAggregation>, mongodb::error::Error> {
         let start_time = Utc::now() - chrono::Duration::days(num_days.unwrap_or(7) as i64);
@@ -92,7 +92,7 @@ impl MetricsRepository {
         metric_name: &str,
         num_bins: i32,
         prediction_type: Option<&str>,
-        predictor_version: Option<i32>,
+        predictor_version: Option<&str>,
         num_days: Option<i32>,
     ) -> Result<Vec<MetricBinsAggregation>, mongodb::error::Error> {
         let start_time = Utc::now() - chrono::Duration::days(num_days.unwrap_or(7) as i64);

@@ -12,7 +12,7 @@ use crate::web::routes::AppState;
 pub struct MetricsSummaryQuery {
     pub metric_name: Option<String>,
     pub prediction_type: Option<String>,
-    pub predictor_version: Option<i32>,
+    pub predictor_version: Option<String>,
     pub num_days: Option<i32>,
 }
 
@@ -21,7 +21,7 @@ pub struct MetricBinsQuery {
     pub metric_name: Option<String>,
     pub num_bins: Option<i32>,
     pub prediction_type: Option<String>,
-    pub predictor_version: Option<i32>,
+    pub predictor_version: Option<String>,
     pub num_days: Option<i32>,
 }
 
@@ -54,7 +54,7 @@ pub async fn get_metric_summary_aggregation(
         .get_metric_aggregation(
             &metric_name,
             params.prediction_type.as_deref(),
-            params.predictor_version,
+            params.predictor_version.as_deref(),
             params.num_days,
         )
         .await
@@ -98,7 +98,7 @@ pub async fn get_metric_bins_aggregation(
             &metric_name,
             num_bins,
             params.prediction_type.as_deref(),
-            params.predictor_version,
+            params.predictor_version.as_deref(),
             params.num_days,
         )
         .await
