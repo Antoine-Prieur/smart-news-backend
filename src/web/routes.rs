@@ -25,6 +25,7 @@ pub fn create_router(app_state: AppState) -> Router {
     Router::new()
         .route("/articles", get(handlers::articles_handlers::get_articles))
         .route("/health", get(handlers::health_handlers::health_check))
+        .route("/metrics", get(handlers::metrics_handlers::list_metrics))
         .route(
             "/metrics/bins",
             get(handlers::metrics_handlers::get_metric_bins_aggregation),

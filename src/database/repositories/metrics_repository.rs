@@ -26,6 +26,55 @@ impl MetricsRepository {
         Self { collection }
     }
 
+    pub async fn list_metrics(
+        &self,
+        metric_name: &str,
+        limit: Option<i64>,
+        skip: Option<u64>,
+        prediction_type: Option<String>,
+        predictor_version: Option<String>,
+    ) -> Result<Vec<MetricsDocument>, mongodb::error::Error> {
+        let mut options = mongodb::options::FindOptions::default();
+
+        options.skip = Some(skip.unwrap_or(0));
+        options.limit = Some(limit.unwrap_or(20));
+
+        options.sort = Some(doc! { "created_at": -1 });
+
+        let mut filter = doc! {};
+        filter.insert("metric_name", metric_name);
+
+        if let Some(pred_type) = prediction_type {
+            filter.insert("tags.prediction_type", pred_type);
+        }
+
+        if let Some(pred_version) = predictor_version {
+            filter.insert("tags.predictor_version", pred_version);
+        }
+
+        let mut cursor = self
+            .collection
+            .find(filter)
+            .with_options(Some(options))
+            .await?;
+
+        let mut metrics = Vec::new();
+
+        while cursor.advance().await? {
+            match cursor.deserialize_current() {
+                Ok(metric) => metrics.push(metric),
+                Err(e) => {
+                    log::error!("Failed to deserialize metric: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+
+        info!("Retrieved {} metrics from database", metrics.len());
+
+        Ok(metrics)
+    }
+
     pub async fn get_metric_summary_aggregation(
         &self,
         metric_name: &str,

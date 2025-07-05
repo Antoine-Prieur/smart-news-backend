@@ -5,8 +5,19 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::database::repositories::models::metrics_repository_models::MetricBinsAggregation;
+use crate::database::repositories::models::metrics_repository_models::{
+    MetricBinsAggregation, MetricsDocument,
+};
 use crate::web::routes::AppState;
+
+#[derive(Deserialize)]
+pub struct MetricsListQuery {
+    pub metric_name: String,
+    pub limit: Option<i64>,
+    pub skip: Option<u64>,
+    pub prediction_type: Option<String>,
+    pub predictor_version: Option<String>,
+}
 
 #[derive(Deserialize)]
 pub struct MetricsSummaryQuery {
@@ -26,6 +37,11 @@ pub struct MetricBinsQuery {
 }
 
 #[derive(Serialize)]
+pub struct MetricsListResponse {
+    pub metrics: Vec<MetricsDocument>,
+}
+
+#[derive(Serialize)]
 pub struct MetricAggregationResponse {
     pub metric_name: String,
     pub avg_value: f64,
@@ -38,6 +54,32 @@ pub struct MetricAggregationResponse {
 #[derive(Serialize)]
 pub struct MetricBinsAggregationResponse {
     pub metric_bins: Vec<MetricBinsAggregation>,
+}
+
+pub async fn list_metrics(
+    Query(params): Query<MetricsListQuery>,
+    State(app_state): State<AppState>,
+) -> Result<Json<MetricsListResponse>, StatusCode> {
+    match app_state
+        .metrics_service
+        .list_metrics(
+            &params.metric_name,
+            params.limit,
+            params.skip,
+            params.prediction_type,
+            params.predictor_version,
+        )
+        .await
+    {
+        Ok(metrics) => {
+            let response = MetricsListResponse { metrics };
+            Ok(Json(response))
+        }
+        Err(e) => {
+            log::error!("Service error: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 pub async fn get_metric_summary_aggregation(

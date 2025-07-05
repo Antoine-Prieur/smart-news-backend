@@ -1,6 +1,6 @@
 use crate::database::repositories::metrics_repository::MetricsRepository;
 use crate::database::repositories::models::metrics_repository_models::{
-    MetricBinsAggregation, MetricSummaryAggregation,
+    MetricBinsAggregation, MetricSummaryAggregation, MetricsDocument,
 };
 use log::{error, info};
 
@@ -13,6 +13,30 @@ impl MetricsService {
     pub fn new(metrics_repository: MetricsRepository) -> Self {
         info!("Created MetricsService");
         Self { metrics_repository }
+    }
+
+    pub async fn list_metrics(
+        &self,
+        metric_name: &str,
+        limit: Option<i64>,
+        skip: Option<u64>,
+        prediction_type: Option<String>,
+        predictor_version: Option<String>,
+    ) -> Result<Vec<MetricsDocument>, Box<dyn std::error::Error>> {
+        info!("Getting list of metrics");
+
+        let metrics = self
+            .metrics_repository
+            .list_metrics(metric_name, limit, skip, prediction_type, predictor_version)
+            .await
+            .map_err(|e| {
+                error!("Failed to get metrics list: {}", e);
+                Box::new(e) as Box<dyn std::error::Error>
+            })?;
+
+        info!("Successfully retrieved {} metrics", metrics.len());
+
+        Ok(metrics)
     }
 
     pub async fn get_metric_aggregation(
