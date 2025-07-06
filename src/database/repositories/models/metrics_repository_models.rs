@@ -10,6 +10,7 @@ pub struct MetricsDocument {
 
     pub metric_name: String,
     pub metric_value: f64,
+    pub description: Option<String>,
 
     pub tags: HashMap<String, String>,
 
