@@ -23,25 +23,59 @@ impl ArticleService {
         Self { article_repository }
     }
 
+    /// Updated method that now gets articles with ALL predictions
     pub async fn get_articles_with_sentiment(
         &self,
         limit: Option<i64>,
         skip: Option<u64>,
         sentiment: Option<&str>,
     ) -> Result<PaginatedArticlesWithSentiment, Box<dyn std::error::Error>> {
-        info!("Getting articles with sentiment analysis");
+        info!("Getting articles with all predictions");
 
         let paginated_articles = self
             .article_repository
-            .list_articles_with_sentiment(limit, skip, sentiment)
+            .list_articles_with_all_predictions(limit, skip, sentiment)
             .await
             .map_err(|e| {
-                error!("Failed to get articles with sentiment filter: {}", e);
+                error!("Failed to get articles with all predictions: {}", e);
                 Box::new(e) as Box<dyn std::error::Error>
             })?;
 
         info!(
-            "Successfully enriched {} articles with sentiment analysis",
+            "Successfully retrieved {} articles with all predictions",
+            paginated_articles.articles.len()
+        );
+
+        Ok(PaginatedArticlesWithSentiment {
+            articles: paginated_articles.articles,
+            total_count: paginated_articles.total_count,
+            current_page_count: paginated_articles.current_page_count,
+            page: paginated_articles.page,
+            per_page: paginated_articles.per_page,
+            total_pages: paginated_articles.total_pages,
+        })
+    }
+
+    /// New method specifically for getting articles with all predictions
+    pub async fn get_articles_with_all_predictions(
+        &self,
+        limit: Option<i64>,
+        skip: Option<u64>,
+        sentiment: Option<&str>,
+    ) -> Result<PaginatedArticlesWithSentiment, Box<dyn std::error::Error>> {
+        info!("Getting articles with all predictions");
+
+        let paginated_articles = self
+            .article_repository
+            .list_articles_with_all_predictions(limit, skip, sentiment)
+            .await
+            .map_err(|e| {
+                error!("Failed to get articles with all predictions: {}", e);
+                Box::new(e) as Box<dyn std::error::Error>
+            })?;
+
+        info!(
+            "Successfully retrieved {} articles with all predictions (including news_classification, sentiment_analysis, etc.)",
             paginated_articles.articles.len()
         );
 

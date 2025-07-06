@@ -30,9 +30,10 @@ pub async fn get_articles(
 ) -> Result<Json<PaginatedArticlesResponse>, StatusCode> {
     let sentiment = params.sentiment.as_deref();
 
+    // Use the updated method that gets all predictions
     match app_state
         .article_service
-        .get_articles_with_sentiment(params.limit, params.skip, sentiment)
+        .get_articles_with_all_predictions(params.limit, params.skip, sentiment)
         .await
     {
         Ok(paginated_articles) => {

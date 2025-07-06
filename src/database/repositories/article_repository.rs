@@ -92,7 +92,8 @@ impl ArticleRepository {
         })
     }
 
-    pub async fn list_articles_with_sentiment(
+    /// New method that gets articles with ALL predictions
+    pub async fn list_articles_with_all_predictions(
         &self,
         limit: Option<i64>,
         skip: Option<u64>,
@@ -101,55 +102,97 @@ impl ArticleRepository {
         let skip_count = skip.unwrap_or(0);
         let limit_count = limit.unwrap_or(20);
 
-        let lookup_match = doc! {
-            "$expr": { "$eq": ["$article_id", "$$articleId"] },
-            "prediction_type": "sentiment_analysis"
-        };
-
+        // This aggregation pipeline will:
+        // 1. Look up all predictions for each article
+        // 2. Convert them to a HashMap of prediction_type -> selected_prediction
+        // 3. Filter by sentiment if requested
         let mut pipeline = vec![
+            // Step 1: Lookup all predictions for each article
             doc! {
                 "$lookup": {
                     "from": "article_predictions",
                     "let": { "articleId": "$_id" },
                     "pipeline": [
                         {
-                            "$match": lookup_match
+                            "$match": {
+                                "$expr": { "$eq": ["$article_id", "$$articleId"] }
+                            }
                         },
                         {
                             "$project": {
-                                "_id": 0,
-                                "selected_prediction": 1,
+                                "prediction_type": 1,
+                                "selected_prediction": 1
                             }
-                        },
-                        { "$limit": 1 }
+                        }
                     ],
-                    "as": "prediction"
+                    "as": "all_predictions"
                 }
             },
+            // Step 2: Convert the array of predictions into a map
             doc! {
                 "$addFields": {
-                    "sentiment_analysis": { "$arrayElemAt": ["$prediction.selected_prediction", 0] }
+                    "predictions": {
+                        "$cond": {
+                            "if": { "$gt": [{ "$size": "$all_predictions" }, 0] },
+                            "then": {
+                                "$arrayToObject": {
+                                    "$map": {
+                                        "input": "$all_predictions",
+                                        "as": "pred",
+                                        "in": {
+                                            "k": "$$pred.prediction_type",
+                                            "v": "$$pred.selected_prediction"
+                                        }
+                                    }
+                                }
+                            },
+                            "else": null
+                        }
+                    },
+                    // Keep sentiment_analysis for backward compatibility
+                    "sentiment_analysis": {
+                        "$let": {
+                            "vars": {
+                                "sentiment_pred": {
+                                    "$arrayElemAt": [
+                                        {
+                                            "$filter": {
+                                                "input": "$all_predictions",
+                                                "cond": { "$eq": ["$$this.prediction_type", "sentiment_analysis"] }
+                                            }
+                                        },
+                                        0
+                                    ]
+                                }
+                            },
+                            "in": "$$sentiment_pred.selected_prediction"
+                        }
+                    }
                 }
             },
+            // Step 3: Remove the temporary all_predictions field
             doc! {
                 "$project": {
-                    "prediction": 0
+                    "all_predictions": 0
                 }
             },
         ];
 
+        // Step 4: Add sentiment filter if requested
         if let Some(sentiment_value) = sentiment {
             pipeline.push(doc! {
                 "$match": {
-                    "sentiment_analysis.prediction_value": sentiment_value
+                    "predictions.sentiment_analysis.prediction_value": sentiment_value
                 }
             });
         }
 
+        // Step 5: Sort by published_at
         pipeline.push(doc! {
             "$sort": { "published_at": -1 }
         });
 
+        // Step 6: Add pagination and count
         pipeline.push(doc! {
             "$facet": {
                 "data": [
@@ -181,12 +224,12 @@ impl ArticleRepository {
 
             let log_message = if let Some(sentiment_value) = sentiment {
                 format!(
-                    "Retrieved {} articles with sentiment '{}' from database (page {} of {})",
+                    "Retrieved {} articles with sentiment '{}' and all predictions from database (page {} of {})",
                     current_page_count, sentiment_value, page, total_pages
                 )
             } else {
                 format!(
-                    "Retrieved {} articles with sentiment data from database (page {} of {})",
+                    "Retrieved {} articles with all predictions from database (page {} of {})",
                     current_page_count, page, total_pages
                 )
             };
@@ -210,5 +253,17 @@ impl ArticleRepository {
                 total_pages: 0,
             })
         }
+    }
+
+    // Keep the old method for backward compatibility
+    pub async fn list_articles_with_sentiment(
+        &self,
+        limit: Option<i64>,
+        skip: Option<u64>,
+        sentiment: Option<&str>,
+    ) -> Result<PaginatedArticles, mongodb::error::Error> {
+        // For now, just delegate to the new method
+        self.list_articles_with_all_predictions(limit, skip, sentiment)
+            .await
     }
 }
