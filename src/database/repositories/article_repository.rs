@@ -92,7 +92,6 @@ impl ArticleRepository {
         })
     }
 
-    /// New method that gets articles with ALL predictions
     pub async fn list_articles_with_all_predictions(
         &self,
         limit: Option<i64>,
@@ -102,12 +101,7 @@ impl ArticleRepository {
         let skip_count = skip.unwrap_or(0);
         let limit_count = limit.unwrap_or(20);
 
-        // This aggregation pipeline will:
-        // 1. Look up all predictions for each article
-        // 2. Convert them to a HashMap of prediction_type -> selected_prediction
-        // 3. Filter by sentiment if requested
         let mut pipeline = vec![
-            // Step 1: Lookup all predictions for each article
             doc! {
                 "$lookup": {
                     "from": "article_predictions",
@@ -128,7 +122,6 @@ impl ArticleRepository {
                     "as": "all_predictions"
                 }
             },
-            // Step 2: Convert the array of predictions into a map
             doc! {
                 "$addFields": {
                     "predictions": {
@@ -149,7 +142,6 @@ impl ArticleRepository {
                             "else": null
                         }
                     },
-                    // Keep sentiment_analysis for backward compatibility
                     "sentiment_analysis": {
                         "$let": {
                             "vars": {
@@ -170,7 +162,6 @@ impl ArticleRepository {
                     }
                 }
             },
-            // Step 3: Remove the temporary all_predictions field
             doc! {
                 "$project": {
                     "all_predictions": 0
@@ -178,7 +169,6 @@ impl ArticleRepository {
             },
         ];
 
-        // Step 4: Add sentiment filter if requested
         if let Some(sentiment_value) = sentiment {
             pipeline.push(doc! {
                 "$match": {
@@ -187,12 +177,10 @@ impl ArticleRepository {
             });
         }
 
-        // Step 5: Sort by published_at
         pipeline.push(doc! {
             "$sort": { "published_at": -1 }
         });
 
-        // Step 6: Add pagination and count
         pipeline.push(doc! {
             "$facet": {
                 "data": [
@@ -255,14 +243,12 @@ impl ArticleRepository {
         }
     }
 
-    // Keep the old method for backward compatibility
     pub async fn list_articles_with_sentiment(
         &self,
         limit: Option<i64>,
         skip: Option<u64>,
         sentiment: Option<&str>,
     ) -> Result<PaginatedArticles, mongodb::error::Error> {
-        // For now, just delegate to the new method
         self.list_articles_with_all_predictions(limit, skip, sentiment)
             .await
     }

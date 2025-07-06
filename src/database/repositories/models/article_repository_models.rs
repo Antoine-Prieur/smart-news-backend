@@ -3,7 +3,6 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-// Articles
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SourceDocument {
     pub id: Option<String>,
@@ -38,11 +37,9 @@ pub struct ArticleDocument {
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub updated_at: DateTime<Utc>,
 
-    // New field: HashMap of prediction_type -> selected_prediction
     #[serde(skip_serializing_if = "Option::is_none")]
     pub predictions: Option<HashMap<String, PredictionDocument>>,
 
-    // Keep the old field for backward compatibility, but it's deprecated
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sentiment_analysis: Option<PredictionDocument>,
 }

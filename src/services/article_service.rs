@@ -23,7 +23,6 @@ impl ArticleService {
         Self { article_repository }
     }
 
-    /// Updated method that now gets articles with ALL predictions
     pub async fn get_articles_with_sentiment(
         &self,
         limit: Option<i64>,
@@ -56,7 +55,6 @@ impl ArticleService {
         })
     }
 
-    /// New method specifically for getting articles with all predictions
     pub async fn get_articles_with_all_predictions(
         &self,
         limit: Option<i64>,
